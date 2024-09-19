@@ -240,9 +240,27 @@ const calculateDailyTipAllowancesSeason1 = async (
 export const updateDailyTipAllowances = async (
   date: string,
   season: number = 1,
-): Promise<Allocation[]> => {
+): Promise<{
+  params: {
+    date: string;
+    totalDailyTokenAllowance: number;
+    minSpaceBalance: number;
+  };
+  allocations: Allocation[];
+  spaceHolders: { [address: string]: number };
+  nogsHolders: { [address: string]: number };
+}> => {
   const allowanceCalculationMethods: {
-    [season: number]: (_date: string) => Promise<any>;
+    [season: number]: (_date: string) => Promise<{
+      params: {
+        date: string;
+        totalDailyTokenAllowance: number;
+        minSpaceBalance: number;
+      };
+      allocations: Allocation[];
+      spaceHolders: { [address: string]: number };
+      nogsHolders: { [address: string]: number };
+    }>;
   } = {
     1: calculateDailyTipAllowancesSeason1,
   };
