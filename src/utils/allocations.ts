@@ -42,6 +42,8 @@ const AIRSTACK_RANKINGS_QUERY = gql`
         socialCapital {
           rank: socialCapitalRank
         }
+        profileDisplayName
+        profileImage
       }
     }
   }
@@ -139,6 +141,8 @@ const getSocialCapitalRankings = async (
         fid: user.fid,
         rank: user.socialCapital.rank,
         username: user.username,
+        displayName: user.profileDisplayName,
+        pfpUrl: user.profileImage,
         ethAddresses: user.connectedAddresses
           .filter(({ blockchain }) => blockchain === "ethereum")
           .map(({ address }) => address.toLowerCase()),
@@ -190,6 +194,8 @@ const calculateDailyTipAllowancesSeason1 = async (
       fid: r.fid,
       rank: r.rank,
       username: r.username,
+      displayName: r.displayName,
+      pfpUrl: r.pfpUrl,
       ethAddress: primaryAddress,
       totalNogs: sumBy(r.ethAddresses, (addr) => nogsHolders[addr] ?? 0),
       totalSpace: sumBy(r.ethAddresses, (addr) => spaceHolders[addr] ?? 0),
