@@ -1,6 +1,6 @@
 // https://github.com/Nounspace/nounspace.ts/issues/400
 
-// import supabase from "@/lib/supabase";
+import supabase from "@/lib/supabase";
 import airstack from "@/lib/airstack";
 import alchemy from "@/lib/alchemy";
 import { NOGS_CONTRACT_ADDRESS, SPACE_CONTRACT_ADDRESS } from "@/constants";
@@ -8,6 +8,7 @@ import bitquery from "@/lib/bitquery";
 import { gql } from "graphql-request";
 import { BitqueryTokenHoldersQueryData } from "@/types";
 import { sumBy } from "@/utils/math";
+import type { Database } from "@/types/database";
 
 import type { SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
 
@@ -243,7 +244,7 @@ const calculateDailyTipAllowancesSeason1 = async (
   };
 };
 
-export const updateDailyTipAllowances = async (
+export const calculateDailyTipAllowances = async (
   date: string,
   season: number = 1,
 ): Promise<{
@@ -279,7 +280,31 @@ export const updateDailyTipAllowances = async (
 
   const dailyTipAllowances = await calculateAllowancesFn(date);
 
-  // @TODO: update db
-
   return dailyTipAllowances;
+};
+
+export const saveDailyTipAllowances = async (date: string, allocations: Allocation[]) => {
+  const formattedAllocations: Database["public"]["Tables"]["daily_tip_allocation"]["Insert"][] = allocations.map((allocation) => {
+    return {
+      allocation_date: date,
+      fid: Number.parseInt(allocation.fid),
+      amount: allocation.allocation,
+      username: allocation.username,
+      display_name: allocation.displayName,
+      pfp_url: allocation.pfpUrl,
+      address: allocation.ethAddress,
+    }
+  });
+
+  const { data, error } = await supabase
+    .from("daily_tip_allocation")
+    .insert(formattedAllocations);
+
+  if (error) {
+    throw error;
+  }
+
+  console.log(`Updated daily_tip_allocation for date: `, date, data);
+
+  return data;
 };

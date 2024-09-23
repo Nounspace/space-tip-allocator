@@ -2,7 +2,7 @@ import {
   errorResponse,
   successResponse,
 } from "@/utils/api";
-import { updateDailyTipAllowances } from "@/utils/allocations";
+import { calculateDailyTipAllowances } from "@/utils/allocations";
 import { getISODateString } from "@/utils/date";
 import { Allocation } from "@/types";
 
@@ -29,7 +29,7 @@ export async function GET() {
   }
 
   try {
-    const allowances = await updateDailyTipAllowances(formattedDate, SEASON_ID);
+    const allowances = await calculateDailyTipAllowances(formattedDate, SEASON_ID);
     cacheData = allowances;
     cacheDate = formattedDate;
     return successResponse(allowances);

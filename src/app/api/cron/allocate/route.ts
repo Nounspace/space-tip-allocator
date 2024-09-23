@@ -5,7 +5,7 @@ import {
   errorResponse,
   successResponse,
 } from "@/utils/api";
-import { updateDailyTipAllowances } from "@/utils/allocations";
+import { calculateDailyTipAllowances, saveDailyTipAllowances } from "@/utils/allocations";
 import { getISODateString } from "@/utils/date";
 
 const SEASON_ID = 1;
@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
   const formattedDate = getISODateString();
 
   try {
-    const allowances = await updateDailyTipAllowances(formattedDate, SEASON_ID);
+    const allowances = await calculateDailyTipAllowances(formattedDate, SEASON_ID);
+    await saveDailyTipAllowances(formattedDate, allowances.allocations);
     return successResponse(allowances);
   } catch (error) {
     return errorResponse(error as Error);
