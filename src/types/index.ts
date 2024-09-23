@@ -21,6 +21,8 @@ export interface SocialRankingsData {
       socialCapital: {
         rank: number;
       };
+      profileDisplayName: string;
+      profileImage: string;
     }[];
   };
 }
@@ -28,6 +30,8 @@ export interface SocialRankingsData {
 export type Ranking = {
   fid: string;
   username: string;
+  displayName: string;
+  pfpUrl: string;
   ethAddresses: string[];
   rank: number;
 };
@@ -35,6 +39,8 @@ export type Ranking = {
 export type Allocation = {
   fid: string;
   username: string;
+  displayName: string;
+  pfpUrl: string;
   ethAddress: string;
   rank: number;
   totalNogs: number;
