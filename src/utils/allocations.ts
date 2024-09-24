@@ -5,12 +5,13 @@ import airstack from "@/lib/airstack";
 import alchemy from "@/lib/alchemy";
 import { NOGS_CONTRACT_ADDRESS, SPACE_CONTRACT_ADDRESS } from "@/constants";
 import bitquery from "@/lib/bitquery";
+import neynar from "@/lib/neynar";
 import { gql } from "graphql-request";
-import { BitqueryTokenHoldersQueryData } from "@/types";
 import { sumBy } from "@/utils/math";
 import type { Database } from "@/types/database";
-
-import type { SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
+import type { BitqueryTokenHoldersQueryData, SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
+import type { CastWithInteractions } from "@neynar/nodejs-sdk/build/neynar-api/v2";
+import { getISODateString } from "@/utils/date";
 
 const AIRSTACK_RANKINGS_QUERY = gql`
   query GetUserSocialCapitalRank(
@@ -96,12 +97,11 @@ const getSpaceHolders = async (
   date: string,
   minBalance: number = 0,
 ): Promise<{ [address: string]: number }> => {
-  const todayDateString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
   const data = await bitquery.request<BitqueryTokenHoldersQueryData>(
     BITQUERY_SPACE_HOLDERS_QUERY,
     {
       minBalance: minBalance.toFixed(0),
-      date: todayDateString,
+      date: date,
     },
   );
 
@@ -308,3 +308,138 @@ export const saveDailyTipAllowances = async (date: string, allocations: Allocati
 
   return data;
 };
+
+const getLatestCastSearchCheckpoint = async (fid: number): Promise<Date | null> => {
+  const { data, error } = await supabase
+    .from("cast_search_checkpoint")
+    .select("timestamp")
+    .eq("fid", fid)
+    .order("timestamp", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return data && data.length > 0 ? new Date(data[0].timestamp) : null;
+}
+
+const updateCastSearchCheckpoint = async (fid: number, timestamp: Date): Promise<Date> => {
+  const { error } = await supabase
+    .from("cast_search_checkpoint")
+    .upsert({ fid, timestamp: timestamp.toISOString() }, {
+      onConflict: "fid",
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return timestamp;
+}
+
+const searchCastsForFid = async function* (fid: number, query: string, afterTimestamp: Date | null): AsyncGenerator<CastWithInteractions[], void, unknown> {
+  let casts: CastWithInteractions[] = [];
+  let cursor: string | null = null;
+  let hasMore = true;
+
+  while (hasMore) {
+    const resp = await neynar.searchCasts(query, {
+      limit: 100,
+      cursor: cursor || undefined,
+      authorFid: fid,
+    });
+
+    const filteredCasts = afterTimestamp ? resp.result.casts.filter((cast) => {
+      return new Date(cast.timestamp) > afterTimestamp;
+    }) : resp.result.casts;
+
+    if (filteredCasts.length > 0) {
+      yield filteredCasts;
+    }
+
+    casts = [...casts, ...filteredCasts];
+    cursor = resp.result.next.cursor;
+    hasMore = !!cursor && filteredCasts.length > 0;
+  }
+}
+
+export const syncCastTipsForFid = async (fid: number) => {
+  const lastCheckpointDate = await getLatestCastSearchCheckpoint(fid);
+  const tipRegex = /\b\d+\.?\d+\s\$SPACE\b/gi;
+
+  for await (const casts of searchCastsForFid(fid, "$space", lastCheckpointDate)) {
+    // search tip amounts in cast text
+    const castsWithTips: Database["public"]["Tables"]["tip"]["Insert"][] = casts.map((cast) => {
+      const match = cast.text.match(tipRegex);
+      return {
+        from_fid: cast.author.fid,
+        to_fid: cast.parent_author.fid ?? 0,
+        allocation_date: getISODateString(new Date(cast.timestamp)),
+        cast_hash: cast.hash,
+        cast_text: cast.text,
+        casted_at: new Date(cast.timestamp).toISOString(),
+        amount: match && match.length > 0 ? Number.parseInt(match[0].split(" ")[0]) : 0,
+      }
+    }).filter((cast) => cast.to_fid !== 0 && cast.amount > 0);
+
+    // check if tip already indexed
+    const { data: indexedTips, error: indexedTipsError } = await supabase
+      .from("tip")
+      .select("cast_hash")
+      .in("cast_hash", castsWithTips.map((cast) => cast.cast_hash));
+
+    if (indexedTipsError) {
+      throw indexedTipsError;
+    }
+
+    const indexedHashes = (indexedTips || []).map((tip) => tip.cast_hash);
+    const tipsToInsert = castsWithTips.filter((cast) => !indexedHashes.includes(cast.cast_hash));
+
+    // save to db
+    if (castsWithTips.length > 0) {
+      const { error: insertError } = await supabase
+        .from("tip")
+        .insert(tipsToInsert);
+
+      if (insertError) {
+        throw insertError;
+      }
+    }
+
+    // update checkpoint
+    await updateCastSearchCheckpoint(fid, new Date(casts[0].timestamp));
+  }
+}
+
+export const syncCastTips = async () => {
+  // get all unique fids from daily_tip_allocation table
+  const { data: users, error: usersError } = await supabase
+    .from("distinct_fids")
+    .select("fid");
+
+  const fids = users?.map((tipper) => tipper.fid!) || [];
+
+  if (usersError) {
+    throw usersError;
+  }
+
+  for (const fid of fids) {
+    await syncCastTipsForFid(fid);
+  }
+
+  await validateTips();
+}
+
+export const validateTips = async () => {
+  // Check if tips are valid based on users' tip allocations.
+  // Tips in which is_valid is null have not been validated yet.
+  // This is done after fully syncing tip casts since casts are
+  // processed from most recent to oldest, whereas validations
+  // should be processed chronologically.
+  const { error } = await supabase.rpc('validate_tips');
+
+  if (error) {
+    throw error;
+  }
+}
