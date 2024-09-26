@@ -19,20 +19,45 @@ let cache: {
   nogsHolders: { [address: string]: number };
 } | null = null;
 
-export async function GET() {
+export async function GET(req: Request) {
   const formattedDate = getISODateString();
 
+  // Add CORS headers to the response
+  const headers = new Headers();
+  headers.set('Access-Control-Allow-Origin', '*'); // Allow all origins
+  headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS'); // Allow GET and OPTIONS methods
+  headers.set('Access-Control-Allow-Headers', 'Content-Type'); // Specify allowed headers
+
   if (cache?.params.date === formattedDate) {
-    return successResponse(cache);
+    return new Response(JSON.stringify(successResponse(cache)), {
+      headers,
+      status: 200,
+    });
   }
 
   try {
     const allowances = await calculateDailyTipAllowances(formattedDate, SEASON_ID);
     cache = allowances;
-    return successResponse(allowances);
+    return new Response(JSON.stringify(successResponse(allowances)), {
+      headers,
+      status: 200,
+    });
   } catch (error) {
-    return errorResponse(error as Error);
+    return new Response(JSON.stringify(errorResponse(error as Error)), {
+      headers,
+      status: 500,
+    });
   }
+}
+
+// Handle OPTIONS preflight request for CORS
+export async function OPTIONS() {
+  const headers = new Headers();
+  headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  return new Response(null, { headers, status: 204 });
 }
 
 // disable vercel cache
