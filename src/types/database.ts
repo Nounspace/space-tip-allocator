@@ -172,6 +172,17 @@ export type Database = {
           address: string
         }[]
       }
+      leaderboard: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          fid: number
+          username: string
+          display_name: string
+          amount_received: number
+          num_received: number
+          pfp_url: string
+        }[]
+      }
       validate_tips: {
         Args: Record<PropertyKey, never>
         Returns: boolean
