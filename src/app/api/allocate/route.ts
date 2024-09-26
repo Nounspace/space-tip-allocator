@@ -19,7 +19,7 @@ let cache: {
   nogsHolders: { [address: string]: number };
 } | null = null;
 
-export async function GET(req: Request) {
+export async function GET() {
   const formattedDate = getISODateString();
 
   // Add CORS headers to the response
