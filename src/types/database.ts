@@ -92,11 +92,17 @@ export type Database = {
           cast_hash: string
           cast_text: string | null
           casted_at: string
+          from_display_name: string | null
           from_fid: number
+          from_pfp_url: string | null
+          from_username: string | null
           id: number
           indexed_at: string
           is_valid: boolean | null
+          to_display_name: string | null
           to_fid: number
+          to_pfp_url: string | null
+          to_username: string | null
         }
         Insert: {
           allocation_date: string
@@ -104,11 +110,17 @@ export type Database = {
           cast_hash: string
           cast_text?: string | null
           casted_at: string
+          from_display_name?: string | null
           from_fid: number
+          from_pfp_url?: string | null
+          from_username?: string | null
           id?: number
           indexed_at?: string
           is_valid?: boolean | null
+          to_display_name?: string | null
           to_fid: number
+          to_pfp_url?: string | null
+          to_username?: string | null
         }
         Update: {
           allocation_date?: string
@@ -116,11 +128,17 @@ export type Database = {
           cast_hash?: string
           cast_text?: string | null
           casted_at?: string
+          from_display_name?: string | null
           from_fid?: number
+          from_pfp_url?: string | null
+          from_username?: string | null
           id?: number
           indexed_at?: string
           is_valid?: boolean | null
+          to_display_name?: string | null
           to_fid?: number
+          to_pfp_url?: string | null
+          to_username?: string | null
         }
         Relationships: []
       }

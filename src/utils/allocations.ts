@@ -10,7 +10,7 @@ import { gql } from "graphql-request";
 import { sumBy } from "@/utils/math";
 import type { Database } from "@/types/database";
 import type { BitqueryTokenHoldersQueryData, SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
-import type { CastWithInteractions } from "@neynar/nodejs-sdk/build/neynar-api/v2";
+import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar-api/v2";
 import { getISODateString } from "@/utils/date";
 
 const AIRSTACK_RANKINGS_QUERY = gql`
@@ -364,24 +364,45 @@ const searchCastsForFid = async function* (fid: number, query: string, afterTime
   }
 }
 
+const getUsersByFids = async function (fids: number[]): Promise<{ [fid: number]: User }> {
+  if (fids.length === 0) {
+    return {};
+  }
+  const resp = await neynar.fetchBulkUsers(fids);
+
+  return resp.users.reduce((acc, user) => ({
+    ...acc,
+    [user.fid]: user,
+  }), {});
+}
+
 export const syncCastTipsForFid = async (fid: number) => {
   const lastCheckpointDate = await getLatestCastSearchCheckpoint(fid);
   const tipRegex = /\b\d+\.?\d+\s\$SPACE\b/gi;
 
   for await (const casts of searchCastsForFid(fid, "$space", lastCheckpointDate)) {
     // search tip amounts in cast text
-    const castsWithTips: Database["public"]["Tables"]["tip"]["Insert"][] = casts.map((cast) => {
+    const castsWithTips = casts.map((cast) => {
       const match = cast.text.match(tipRegex);
+      if (!match || match.length === 0) return null;
+      if (!cast.parent_author.fid) return null;
+
       return {
         from_fid: cast.author.fid,
-        to_fid: cast.parent_author.fid ?? 0,
+        from_username: cast.author.username,
+        from_display_name: cast.author.display_name,
+        from_pfp_url: cast.author.pfp_url,
+        to_fid: cast.parent_author.fid,
+        to_username: null,
+        to_display_name: null,
+        to_pfp_url: null,
         allocation_date: getISODateString(new Date(cast.timestamp)),
         cast_hash: cast.hash,
         cast_text: cast.text,
         casted_at: new Date(cast.timestamp).toISOString(),
-        amount: match && match.length > 0 ? Number.parseInt(match[0].split(" ")[0]) : 0,
+        amount: Number.parseInt(match[0].split(" ")[0]),
       }
-    }).filter((cast) => cast.to_fid !== 0 && cast.amount > 0);
+    }).filter(c => !!c) as Database["public"]["Tables"]["tip"]["Insert"][];
 
     // check if tip already indexed
     const { data: indexedTips, error: indexedTipsError } = await supabase
@@ -396,11 +417,23 @@ export const syncCastTipsForFid = async (fid: number) => {
     const indexedHashes = (indexedTips || []).map((tip) => tip.cast_hash);
     const tipsToInsert = castsWithTips.filter((cast) => !indexedHashes.includes(cast.cast_hash));
 
+    const recipientFids = Array.from(new Set(castsWithTips.map((cast) => cast.to_fid)));
+    const recipientUsers = await getUsersByFids(recipientFids);
+
+    const tipsToInsertWithRecipients = tipsToInsert.map((tip) => {
+      return {
+        ...tip,
+        to_username: recipientUsers[tip.to_fid]?.username,
+        to_display_name: recipientUsers[tip.to_fid]?.display_name,
+        to_pfp_url: recipientUsers[tip.to_fid]?.pfp_url,
+      }
+    });
+
     // save to db
-    if (castsWithTips.length > 0) {
+    if (tipsToInsertWithRecipients.length > 0) {
       const { error: insertError } = await supabase
         .from("tip")
-        .insert(tipsToInsert);
+        .insert(tipsToInsertWithRecipients);
 
       if (insertError) {
         throw insertError;
