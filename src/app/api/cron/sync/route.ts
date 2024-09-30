@@ -21,3 +21,5 @@ export async function GET(request: NextRequest) {
     return errorResponse(error as Error);
   }
 }
+
+export const maxDuration = 60;
