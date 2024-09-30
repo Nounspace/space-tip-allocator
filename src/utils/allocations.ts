@@ -380,7 +380,7 @@ export const syncCastTipsForFid = async (fid: number) => {
   const lastCheckpointDate = await getLatestCastSearchCheckpoint(fid);
   const tipRegex = /\b\d+\.?\d+\s\$SPACE\b/gi;
 
-  for await (const casts of searchCastsForFid(fid, "$space", lastCheckpointDate)) {
+  for await (const casts of searchCastsForFid(fid, "SPACE", lastCheckpointDate)) {
     // search tip amounts in cast text
     const castsWithTips = casts.map((cast) => {
       const match = cast.text.match(tipRegex);
