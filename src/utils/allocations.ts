@@ -2,6 +2,7 @@
 
 import supabase from "@/lib/supabase";
 import airstack from "@/lib/airstack";
+import alchemy from "@/lib/alchemy";
 import { NOGS_CONTRACT_ADDRESS, SPACE_CONTRACT_ADDRESS } from "@/constants";
 import bitquery from "@/lib/bitquery";
 import neynar from "@/lib/neynar";
@@ -11,8 +12,6 @@ import type { Database } from "@/types/database";
 import type { BitqueryTokenHoldersQueryData, SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
 import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar-api/v2";
 import { getISODateString } from "@/utils/date";
-import Moralis from "moralis";
-
 
 const AIRSTACK_RANKINGS_QUERY = gql`
   query GetUserSocialCapitalRank(
@@ -76,63 +75,68 @@ const BITQUERY_SPACE_HOLDERS_QUERY = gql`
 `;
 
 const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
+  const { owners } = await alchemy.nft.getOwnersForContract(
+    NOGS_CONTRACT_ADDRESS,
+    {
+      withTokenBalances: true,
+    },
+  );
+
+  return owners.reduce((res, owner) => {
+    return {
+      ...res,
+      [owner.ownerAddress.toLowerCase()]: owner.tokenBalances.reduce(
+        (sum, a) => sum + Number.parseInt(a.balance),
+        0,
+      ),
+    };
+  }, {});
+};
+
+import Moralis from "moralis";
+
+const getSpaceHolders = async (
+  minBalance: number = 0,
+): Promise<{ [address: string]: number }> => {
   try {
     console.log("Initializing Moralis with API key...");
     await Moralis.start({ apiKey: process.env.MORALIS_API_KEY });
 
-    console.log("Fetching NOGS holders from Moralis...");
+    console.log("Fetching SPACE holders from Moralis...");
     const response = await Moralis.EvmApi.token.getTokenOwners({
-      chain: "0x2105", // Ensure this is the correct chain ID for "base"
+      chain: "0x2105", // Replace with the correct chain ID for the Base network if different
       order: "DESC",
-      tokenAddress: NOGS_CONTRACT_ADDRESS,
+      tokenAddress: SPACE_CONTRACT_ADDRESS,
     });
 
-    // Use toJSON() to access the raw data from the paginated response
+    // Use toJSON() to get raw data
     const responseData = response.toJSON();
-    console.log("Response data from toJSON:", responseData);
+    console.log("Response data from Moralis:", responseData);
 
-    // Assuming responseData.result is an array of token owners
-    const holders = responseData.result.reduce((res: { [address: string]: number }, owner) => {
-      const address = owner.owner_address.toLowerCase();
-      const balance = Number.parseInt(owner.balance);
+    // Process the holders based on the minimum balance requirement
+    const holders = (responseData.result || []).reduce(
+      (res: { [address: string]: number }, holder) => {
+        const address = holder.owner_address.toLowerCase();
+        const balance = Number.parseFloat(holder.balance || "0");
 
-      console.log(`Owner: ${address}, Balance: ${balance}`);
-      return {
-        ...res,
-        [address]: (res[address] || 0) + balance,
-      };
-    }, {});
+        // Filter by minimum balance
+        if (balance >= minBalance) {
+          res[address] = balance;
+        }
 
-    console.log("Final NOGS holders:", holders);
+        return res;
+      },
+      {}
+    );
+
+    console.log("Final SPACE holders:", holders);
     return holders;
   } catch (error) {
-    console.error("Failed to fetch nOGs holders from Moralis:", error);
+    console.error("Failed to fetch SPACE holders from Moralis:", error);
     return {};
   }
 };
 
-const getSpaceHolders = async (
-  date: string,
-  minBalance: number = 0,
-): Promise<{ [address: string]: number }> => {
-  const data = await bitquery.request<BitqueryTokenHoldersQueryData>(
-    BITQUERY_SPACE_HOLDERS_QUERY,
-    {
-      minBalance: minBalance.toFixed(0),
-      date: date,
-    },
-  );
-
-  return (data?.EVM?.TokenHolders || []).reduce(
-    (res, holder) => ({
-      ...res,
-      [holder?.Holder?.Address.toLowerCase()]: Number.parseFloat(
-        holder?.Balance?.Amount || "0",
-      ),
-    }),
-    {},
-  );
-};
 
 const getSocialCapitalRankings = async (
   filterAddresses: string[] = [],
@@ -195,8 +199,8 @@ const calculateDailyTipAllowancesSeason1 = async (
   nogsHolders: { [address: string]: number };
 }> => {
   const nogsHolders = await getNogsHolders();
-  const spaceHolders = await getSpaceHolders(date, minSpaceBalance);
-
+  const spaceHolders = await getSpaceHolders();
+  console.log("Space holders:", spaceHolders);
   const eligibleWallets: string[] = Object.keys(nogsHolders).filter(
     (address) => address in spaceHolders,
   );
