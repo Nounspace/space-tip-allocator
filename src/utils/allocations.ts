@@ -2,7 +2,6 @@
 
 import supabase from "@/lib/supabase";
 import airstack from "@/lib/airstack";
-import alchemy from "@/lib/alchemy";
 import { NOGS_CONTRACT_ADDRESS, SPACE_CONTRACT_ADDRESS } from "@/constants";
 import bitquery from "@/lib/bitquery";
 import neynar from "@/lib/neynar";
@@ -13,7 +12,6 @@ import type { BitqueryTokenHoldersQueryData, SocialRankingsQueryResponse, Rankin
 import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar-api/v2";
 import { getISODateString } from "@/utils/date";
 import Moralis from "moralis";
-import { start } from "repl";
 
 const AIRSTACK_RANKINGS_QUERY = gql`
   query GetUserSocialCapitalRank(
@@ -83,7 +81,7 @@ const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
     const response = await Moralis.EvmApi.token.getTokenOwners({
       chain: "base",
       order: "DESC",
-      tokenAddress: "0x48C6740BcF807d6C47C864FaEEA15Ed4dA3910Ab",
+      tokenAddress: NOGS_CONTRACT_ADDRESS,
     });
 
     return response.result.reduce((res: { [address: string]: number }, owner) => {
