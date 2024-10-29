@@ -12,6 +12,9 @@ import type { BitqueryTokenHoldersQueryData, SocialRankingsQueryResponse, Rankin
 import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar-api/v2";
 import { getISODateString } from "@/utils/date";
 import Moralis from "moralis";
+import { log } from "console";
+import { env } from "process";
+import { start } from "repl";
 
 const AIRSTACK_RANKINGS_QUERY = gql`
   query GetUserSocialCapitalRank(
@@ -76,23 +79,31 @@ const BITQUERY_SPACE_HOLDERS_QUERY = gql`
 
 const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
   try {
+    console.log("Initializing Moralis with API key...");
     await Moralis.start({ apiKey: process.env.MORALIS_API_KEY });
 
+    console.log("Fetching NOGS holders from Moralis...");
     const response = await Moralis.EvmApi.token.getTokenOwners({
-      chain: "0x2105",
+      chain: "0x2105", // Replace with the correct chain ID for "base"
       order: "DESC",
       tokenAddress: NOGS_CONTRACT_ADDRESS,
     });
 
-    return response.result.reduce((res: { [address: string]: number }, owner) => {
+    console.log("Response from Moralis:", response.raw);
+
+    const holders = response.result.reduce((res: { [address: string]: number }, owner) => {
       const address = owner.ownerAddress.toLowerCase();
       const balance = Number.parseInt(owner.balance);
 
+      console.log(`Owner: ${address}, Balance: ${balance}`);
       return {
         ...res,
         [address]: (res[address] || 0) + balance,
       };
     }, {});
+
+    console.log("Final NOGS holders:", holders);
+    return holders;
   } catch (error) {
     console.error("Failed to fetch nOGs holders from Moralis:", error);
     return {};
