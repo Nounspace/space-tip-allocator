@@ -12,6 +12,8 @@ import type { Database } from "@/types/database";
 import type { BitqueryTokenHoldersQueryData, SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
 import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar-api/v2";
 import { getISODateString } from "@/utils/date";
+import Moralis from "moralis";
+import { start } from "repl";
 
 const AIRSTACK_RANKINGS_QUERY = gql`
   query GetUserSocialCapitalRank(
@@ -75,22 +77,28 @@ const BITQUERY_SPACE_HOLDERS_QUERY = gql`
 `;
 
 const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
-  const { owners } = await alchemy.nft.getOwnersForContract(
-    NOGS_CONTRACT_ADDRESS,
-    {
-      withTokenBalances: true,
-    },
-  );
+  try {
+    await Moralis.start({ apiKey: process.env.MORALIS_API_KEY });
 
-  return owners.reduce((res, owner) => {
-    return {
-      ...res,
-      [owner.ownerAddress.toLowerCase()]: owner.tokenBalances.reduce(
-        (sum, a) => sum + Number.parseInt(a.balance),
-        0,
-      ),
-    };
-  }, {});
+    const response = await Moralis.EvmApi.token.getTokenOwners({
+      chain: "base",
+      order: "DESC",
+      tokenAddress: "0x48C6740BcF807d6C47C864FaEEA15Ed4dA3910Ab",
+    });
+
+    return response.result.reduce((res: { [address: string]: number }, owner) => {
+      const address = owner.ownerAddress.toLowerCase();
+      const balance = Number.parseInt(owner.balance);
+
+      return {
+        ...res,
+        [address]: (res[address] || 0) + balance,
+      };
+    }, {});
+  } catch (error) {
+    console.error("Failed to fetch nOGs holders from Moralis:", error);
+    return {};
+  }
 };
 
 const getSpaceHolders = async (
