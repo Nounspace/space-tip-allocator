@@ -51,28 +51,28 @@ const AIRSTACK_RANKINGS_QUERY = gql`
   }
 `;
 
-const BITQUERY_SPACE_HOLDERS_QUERY = gql`
-  query GetTokenHolders(
-    $minBalance: String = "0",
-    $date: String!
-  ) {
-    EVM(dataset: archive, network: base) {
-      TokenHolders(
-        date: $date
-        tokenSmartContract: "${SPACE_CONTRACT_ADDRESS}"
-        where: { Balance: { Amount: { ge: $minBalance } } }
-        orderBy: { descending: Balance_Amount }
-      ) {
-        Holder {
-          Address
-        }
-        Balance {
-          Amount
-        }
-      }
-    }
-  }
-`;
+// const BITQUERY_SPACE_HOLDERS_QUERY = gql`
+//   query GetTokenHolders(
+//     $minBalance: String = "0",
+//     $date: String!
+//   ) {
+//     EVM(dataset: archive, network: base) {
+//       TokenHolders(
+//         date: $date
+//         tokenSmartContract: "${SPACE_CONTRACT_ADDRESS}"
+//         where: { Balance: { Amount: { ge: $minBalance } } }
+//         orderBy: { descending: Balance_Amount }
+//       ) {
+//         Holder {
+//           Address
+//         }
+//         Balance {
+//           Amount
+//         }
+//       }
+//     }
+//   }
+// `;
 
 const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
   const { owners } = await alchemy.nft.getOwnersForContract(
