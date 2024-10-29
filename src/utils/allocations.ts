@@ -79,7 +79,7 @@ const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
     await Moralis.start({ apiKey: process.env.MORALIS_API_KEY });
 
     const response = await Moralis.EvmApi.token.getTokenOwners({
-      chain: "base",
+      chain: "0x2105",
       order: "DESC",
       tokenAddress: NOGS_CONTRACT_ADDRESS,
     });
