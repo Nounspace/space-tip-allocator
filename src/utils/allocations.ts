@@ -82,15 +82,18 @@ const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
 
     console.log("Fetching NOGS holders from Moralis...");
     const response = await Moralis.EvmApi.token.getTokenOwners({
-      chain: "0x2105", // Replace with the correct chain ID for "base"
+      chain: "0x2105", // Ensure this is the correct chain ID for "base"
       order: "DESC",
       tokenAddress: NOGS_CONTRACT_ADDRESS,
     });
 
-    console.log("Response from Moralis:", response.raw);
+    // Use toJSON() to access the raw data from the paginated response
+    const responseData = response.toJSON();
+    console.log("Response data from toJSON:", responseData);
 
-    const holders = response.result.reduce((res: { [address: string]: number }, owner) => {
-      const address = owner.ownerAddress.toLowerCase();
+    // Assuming responseData.result is an array of token owners
+    const holders = responseData.result.reduce((res: { [address: string]: number }, owner) => {
+      const address = owner.owner_address.toLowerCase();
       const balance = Number.parseInt(owner.balance);
 
       console.log(`Owner: ${address}, Balance: ${balance}`);
