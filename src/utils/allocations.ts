@@ -12,6 +12,7 @@ import type { Database } from "@/types/database";
 import type { SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
 import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar-api/v2";
 import { getISODateString } from "@/utils/date";
+import Moralis from "moralis";
 
 const AIRSTACK_RANKINGS_QUERY = gql`
   query GetUserSocialCapitalRank(
@@ -93,11 +94,10 @@ const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
   }, {});
 };
 
-import Moralis from "moralis";
 
 const getSpaceHolders = async (
-  minBalance: number = 0,
-): Promise<{ [address: string]: number }> => {
+  minBalance: number = 11111,
+): Promise<{ [address: string]: number }> => { // Return type expects numbers, not strings
   try {
     console.log("Initializing Moralis with API key...");
     await Moralis.start({ apiKey: process.env.MORALIS_API_KEY });
@@ -109,19 +109,20 @@ const getSpaceHolders = async (
       tokenAddress: SPACE_CONTRACT_ADDRESS,
     });
 
-    // Use toJSON() to get raw data
-    const responseData = response.toJSON();
-    console.log("Response data from Moralis:", responseData);
+    // Minimum balance in raw units (adjusted for 18 decimals)
+    const minBalanceRaw = minBalance * Math.pow(10, 18);
 
     // Process the holders based on the minimum balance requirement
+    const responseData = response.toJSON();
     const holders = (responseData.result || []).reduce(
       (res: { [address: string]: number }, holder) => {
         const address = holder.owner_address.toLowerCase();
-        const balance = Number.parseFloat(holder.balance || "0");
+        const balanceRaw = Number.parseFloat(holder.balance || "0");
+        const balance = balanceRaw / Math.pow(10, 18); // Adjust for 18 decimals
 
-        // Filter by minimum balance
-        if (balance >= minBalance) {
-          res[address] = balance;
+        // Filter by minimum balance (in raw units)
+        if (balanceRaw >= minBalanceRaw) {
+          res[address] = balance; // Keep as number for compatibility
         }
 
         return res;
@@ -129,7 +130,7 @@ const getSpaceHolders = async (
       {}
     );
 
-    console.log("Final SPACE holders:", holders);
+    console.log("SPACE holders with numerical balances:", holders);
     return holders;
   } catch (error) {
     console.error("Failed to fetch SPACE holders from Moralis:", error);
