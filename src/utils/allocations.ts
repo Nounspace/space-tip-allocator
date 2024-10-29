@@ -4,12 +4,12 @@ import supabase from "@/lib/supabase";
 import airstack from "@/lib/airstack";
 import alchemy from "@/lib/alchemy";
 import { NOGS_CONTRACT_ADDRESS, SPACE_CONTRACT_ADDRESS } from "@/constants";
-import bitquery from "@/lib/bitquery";
+// import bitquery from "@/lib/bitquery";
 import neynar from "@/lib/neynar";
 import { gql } from "graphql-request";
 import { sumBy } from "@/utils/math";
 import type { Database } from "@/types/database";
-import type { BitqueryTokenHoldersQueryData, SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
+import type { SocialRankingsQueryResponse, Ranking, Allocation } from "@/types";
 import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar-api/v2";
 import { getISODateString } from "@/utils/date";
 
