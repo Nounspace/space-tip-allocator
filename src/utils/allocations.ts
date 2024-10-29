@@ -12,9 +12,7 @@ import type { BitqueryTokenHoldersQueryData, SocialRankingsQueryResponse, Rankin
 import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar-api/v2";
 import { getISODateString } from "@/utils/date";
 import Moralis from "moralis";
-import { log } from "console";
-import { env } from "process";
-import { start } from "repl";
+
 
 const AIRSTACK_RANKINGS_QUERY = gql`
   query GetUserSocialCapitalRank(
