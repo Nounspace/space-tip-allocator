@@ -42,7 +42,7 @@ export type Allocation = {
   displayName: string;
   pfpUrl: string;
   ethAddress: string;
-  rank: number;
+  airStackRank: number;
   totalNogs: number;
   totalSpace: number;
   allocation: number;

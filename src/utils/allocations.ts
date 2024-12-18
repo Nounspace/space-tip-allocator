@@ -94,15 +94,12 @@ const getNogsHolders = async (): Promise<{ [address: string]: number }> => {
   }, {});
 };
 
-
 const getSpaceHolders = async (
   minBalance: number = 11111,
 ): Promise<{ [address: string]: number }> => { // Return type expects numbers, not strings
   try {
-    console.log("Initializing Moralis with API key...");
     await Moralis.start({ apiKey: process.env.MORALIS_API_KEY });
 
-    console.log("Fetching SPACE holders from Moralis...");
     const response = await Moralis.EvmApi.token.getTokenOwners({
       chain: "0x2105", // Replace with the correct chain ID for the Base network if different
       order: "DESC",
@@ -130,14 +127,12 @@ const getSpaceHolders = async (
       {}
     );
 
-    console.log("SPACE holders with numerical balances:", holders);
     return holders;
   } catch (error) {
     console.error("Failed to fetch SPACE holders from Moralis:", error);
     return {};
   }
 };
-
 
 const getSocialCapitalRankings = async (
   filterAddresses: string[] = [],
@@ -153,13 +148,14 @@ const getSocialCapitalRankings = async (
         cursor: nextCursor,
         filterAddresses,
       });
-
+    // console.log(data);
+    // console.log("Social capital rankings:", data.Socials);
     if (error) {
       throw error;
     }
 
     const { pageInfo, Social: users } = data?.Socials;
-
+    // console.log(users);
     const pageRankings = users.map((user) => {
       return {
         fid: user.fid,
@@ -182,8 +178,19 @@ const getSocialCapitalRankings = async (
     hasNextPage = pageInfo.hasNextPage;
   }
 
+  // console.log("Social capital rankings:", rankings);
   return rankings;
 };
+
+
+const getNeynarUsers = async (
+  fids: string[],
+): Promise<User[]> => {
+
+  const users = await neynar.fetchBulkUsers(fids.map(fid => parseInt(fid)));
+  return users.users;
+};
+
 
 const calculateDailyTipAllowancesSeason1 = async (
   date: string,
@@ -201,22 +208,27 @@ const calculateDailyTipAllowancesSeason1 = async (
 }> => {
   const nogsHolders = await getNogsHolders();
   const spaceHolders = await getSpaceHolders();
-  console.log("Space holders:", spaceHolders);
   const eligibleWallets: string[] = Object.keys(nogsHolders).filter(
     (address) => address in spaceHolders,
   );
-
   const sortedRankings: Ranking[] = eligibleWallets.length
     ? await getSocialCapitalRankings(eligibleWallets)
     : [];
+  // map ranking and from its users fids get its scores and add it to the object 
 
-  const formattedRankings = sortedRankings.map((r) => {
+  const formattedRankings = await Promise.all(sortedRankings.map(async (r) => {
     // If multiple linked addresses, select first address holding space
     const primaryAddress = r.ethAddresses.filter((a) => a in spaceHolders)[0];
+    const neynarUsers = await getNeynarUsers([r.fid]);
+    const user = neynarUsers.find(user => user.fid === parseInt(r.fid));
+    console.log(user?.experimental);
+
+    // now we have to append the score to the object
 
     return {
       fid: r.fid,
-      rank: r.rank,
+      farcasterScore: user?.experimental?.neynar_user_score || 0,
+      airStackRank: r.rank,
       username: r.username,
       displayName: r.displayName,
       pfpUrl: r.pfpUrl,
@@ -224,22 +236,24 @@ const calculateDailyTipAllowancesSeason1 = async (
       totalNogs: sumBy(r.ethAddresses, (addr) => nogsHolders[addr] ?? 0),
       totalSpace: sumBy(r.ethAddresses, (addr) => spaceHolders[addr] ?? 0),
     };
-  });
+  }));
 
-  // Calculate the sum of ranks for proportional allocation
-  const rankSum =
-    (formattedRankings.length * (formattedRankings.length + 1)) / 2;
+  // Sort the rankings by farcaster score in descending order
+  const sortedByScore = formattedRankings.sort((a, b) => b.farcasterScore - a.farcasterScore);
 
-  // Calculate the weight based on position (1-indexed).
-  const allocations: number[] = formattedRankings.map((_, i) => {
-    const weight = (formattedRankings.length - i) / rankSum;
+  // Calculate the sum of farcaster scores for proportional allocation
+  const scoreSum = sortedByScore.reduce((sum, row) => sum + row.farcasterScore, 0);
+
+  // Calculate the weight based on farcaster score.
+  const allocations: number[] = sortedByScore.map((row) => {
+    const weight = row.farcasterScore / scoreSum;
     return Math.round(weight * totalDailyTokenAllowance);
   });
 
   // Adjust for rounding errors
   const allocationSum = allocations.reduce((sum, amt) => sum + amt, 0);
 
-  // Distribute any remaining tokens to the highest-ranked rows
+  // Distribute any remaining tokens to the highest-scored rows
   const difference = Math.round(totalDailyTokenAllowance - allocationSum);
 
   const adjustedAllocations = allocations.map((allocation, i) => {
@@ -248,7 +262,7 @@ const calculateDailyTipAllowancesSeason1 = async (
       : allocation + (difference > 0 ? 1 : -1);
   });
 
-  const formattedAllocations = formattedRankings.map((row, i) => {
+  const formattedAllocations = sortedByScore.map((row, i) => {
     return {
       ...row,
       allocation: adjustedAllocations[i],
@@ -326,9 +340,6 @@ export const saveDailyTipAllowances = async (date: string, allocations: Allocati
   if (error) {
     throw error;
   }
-
-  console.log(`Updated daily_tip_allocation for date: `, date, data);
-
   return data;
 };
 
