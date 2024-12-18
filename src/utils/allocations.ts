@@ -14,6 +14,12 @@ import type { CastWithInteractions, User } from "@neynar/nodejs-sdk/build/neynar
 import { getISODateString } from "@/utils/date";
 import Moralis from "moralis";
 
+interface NeynarUser extends User {
+  experimental?: {
+    neynar_user_score: number;
+  }
+}
+
 const AIRSTACK_RANKINGS_QUERY = gql`
   query GetUserSocialCapitalRank(
     $cursor: String = ""
@@ -185,7 +191,7 @@ const getSocialCapitalRankings = async (
 
 const getNeynarUsers = async (
   fids: string[],
-): Promise<User[]> => {
+): Promise<NeynarUser[]> => {
 
   const users = await neynar.fetchBulkUsers(fids.map(fid => parseInt(fid)));
   return users.users;
@@ -398,7 +404,7 @@ const searchCastsForFid = async function* (fid: number, query: string, afterTime
   }
 }
 
-const getUsersByFids = async function (fids: number[]): Promise<{ [fid: number]: User }> {
+const getUsersByFids = async function (fids: number[]): Promise<{ [fid: number]: NeynarUser }> {
   if (fids.length === 0) {
     return {};
   }
