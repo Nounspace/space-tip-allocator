@@ -226,7 +226,7 @@ const calculateDailyTipAllowancesSeason1 = async (
     // If multiple linked addresses, select first address holding space
     const primaryAddress = r.ethAddresses.filter((a) => a in spaceHolders)[0];
     const neynarUsers = await getNeynarUsers([r.fid]);
-    const user = neynarUsers.find(user => user.fid === parseInt(r.fid));
+    const user = neynarUsers.find((user: NeynarUser) => user.fid === parseInt(r.fid));
     console.log(user?.experimental);
 
     // now we have to append the score to the object
@@ -244,14 +244,14 @@ const calculateDailyTipAllowancesSeason1 = async (
     };
   }));
 
-  // Sort the rankings by farcaster score in descending order
-  const sortedByScore = formattedRankings.sort((a, b) => b.farcasterScore - a.farcasterScore);
+  // Load the ban list from the environment variable
+  const nerfedUsers: { fid: number; username: string }[] = JSON.parse(process.env.BANLIST_JSON || '[]');
 
   // Calculate the sum of farcaster scores for proportional allocation
-  const scoreSum = sortedByScore.reduce((sum, row) => sum + row.farcasterScore, 0);
+  const scoreSum = formattedRankings.reduce((sum, row) => sum + row.farcasterScore, 0);
 
   // Calculate the weight based on farcaster score.
-  const allocations: number[] = sortedByScore.map((row) => {
+  const allocations: number[] = formattedRankings.map((row) => {
     const weight = row.farcasterScore / scoreSum;
     return Math.round(weight * totalDailyTokenAllowance);
   });
@@ -268,10 +268,21 @@ const calculateDailyTipAllowancesSeason1 = async (
       : allocation + (difference > 0 ? 1 : -1);
   });
 
-  const formattedAllocations = sortedByScore.map((row, i) => {
+  // Hardcode the tip allowances for specific users to 11
+  const nerfedFids = nerfedUsers.map(user => user.fid);
+  const nerfedAllocation = 11;
+  const nerfedTotal = nerfedAllocation * nerfedUsers.length;
+
+  const finalAllocations = formattedRankings.map((row, i) => {
+    if (nerfedFids.includes(parseInt(row.fid))) {
+      return {
+        ...row,
+        allocation: nerfedAllocation,
+      };
+    }
     return {
       ...row,
-      allocation: adjustedAllocations[i],
+      allocation: adjustedAllocations[i] - (nerfedTotal / (formattedRankings.length - nerfedUsers.length)),
     };
   });
 
@@ -281,7 +292,7 @@ const calculateDailyTipAllowancesSeason1 = async (
       totalDailyTokenAllowance,
       minSpaceBalance,
     },
-    allocations: formattedAllocations,
+    allocations: finalAllocations,
     spaceHolders,
     nogsHolders,
   };
